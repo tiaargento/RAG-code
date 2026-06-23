@@ -1,3 +1,5 @@
+"""Chunking layer: split Markdown into retrieval-sized pieces."""
+
 import re
 import hashlib
 from datetime import datetime, timezone
@@ -10,10 +12,12 @@ _enc = tiktoken.get_encoding("cl100k_base")
 
 
 def _num_tokens(text: str) -> int:
+    """Count tokens using the same encoding used by the chunk splitter."""
     return len(_enc.encode(text, disallowed_special=()))
 
 
 def chunk_markdown(markdown: str, metadata: dict) -> list[dict]:
+    """Split Markdown into chunks and attach retrieval metadata to each chunk."""
     sections = _split_by_headings(markdown)
 
     chunks = []
@@ -21,9 +25,11 @@ def chunk_markdown(markdown: str, metadata: dict) -> list[dict]:
         section_text = f"{heading}\n{body}" if heading else body
         tokens = _num_tokens(section_text)
 
+        # Keep short heading sections intact so headings stay with their content.
         if tokens <= CHUNK_SIZE:
             chunks.append(section_text)
         else:
+            # For long sections, prefer paragraph boundaries before token cuts.
             paragraphs = re.split(r"\n\s*\n", section_text)
             current = ""
             for para in paragraphs:
@@ -37,6 +43,7 @@ def chunk_markdown(markdown: str, metadata: dict) -> list[dict]:
                     if current:
                         chunks.append(current)
                     if _num_tokens(para) > CHUNK_SIZE:
+                        # Very long paragraphs still need a token-level fallback.
                         chunks.extend(_split_by_tokens(para))
                     else:
                         current = para
@@ -45,6 +52,7 @@ def chunk_markdown(markdown: str, metadata: dict) -> list[dict]:
 
     chunk_docs = []
     for idx, text in enumerate(chunks):
+        # The chunk hash is used by store.py for simple re-ingestion deduping.
         doc = {
             "text": text,
             "metadata": {
@@ -62,6 +70,7 @@ def chunk_markdown(markdown: str, metadata: dict) -> list[dict]:
 
 
 def _split_by_tokens(text: str) -> list[str]:
+    """Split oversized text into token windows with overlap."""
     tokens = _enc.encode(text, disallowed_special=())
     parts = []
     for i in range(0, len(tokens), CHUNK_SIZE - CHUNK_OVERLAP):
@@ -71,6 +80,7 @@ def _split_by_tokens(text: str) -> list[str]:
 
 
 def _split_by_headings(md: str) -> list[tuple[str, str]]:
+    """Split Markdown into (heading, body) sections using Markdown headings."""
     pattern = re.compile(r"^(#{1,6}\s+.*)$", re.MULTILINE)
     parts = pattern.split(md)
     sections = []

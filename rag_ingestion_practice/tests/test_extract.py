@@ -1,5 +1,5 @@
 from pathlib import Path
-from extract import extract_from_file, extract_from_html
+from extract import extract_from_file, extract_from_html, strip_markdown_tables
 
 
 class TestExtractFromFile:
@@ -54,3 +54,24 @@ class TestExtractFromHtml:
         """Empty HTML returns None when converter yields empty output."""
         result = extract_from_html("", source_url="empty.html", converter=empty_mock_converter)
         assert result is None
+
+
+class TestMarkdownCleanup:
+    def test_strip_markdown_tables_removes_table_block(self):
+        markdown = (
+            "Before table\n\n"
+            "| Col A | Col B |\n"
+            "| --- | --- |\n"
+            "| one | two |\n"
+            "| three | four |\n\n"
+            "After table"
+        )
+        cleaned = strip_markdown_tables(markdown)
+        assert "Before table" in cleaned
+        assert "After table" in cleaned
+        assert "| Col A | Col B |" not in cleaned
+        assert "| one | two |" not in cleaned
+
+    def test_strip_markdown_tables_keeps_non_table_pipe_line(self):
+        markdown = "This line mentions A | B but is not a markdown table."
+        assert strip_markdown_tables(markdown) == markdown

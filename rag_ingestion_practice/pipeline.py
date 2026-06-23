@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""
-End-to-end RAG ingestion pipeline.
+"""End-to-end RAG ingestion pipeline.
+
+This script orchestrates extraction, chunking, embedding, and storage. It can
+ingest individual files, directories of supported files, or URLs.
 
 Usage:
     python pipeline.py --source data/sample.txt.txt
@@ -24,9 +26,11 @@ def run_pipeline(
     chroma_path: str | None = None,
     ingest_log_path: str | None = None,
 ) -> int:
+    """Run extract -> chunk -> embed -> store for each provided source."""
     collection = get_or_create_collection(chroma_path=chroma_path)
 
     if reindex:
+        # All stored chunks include chunk_index, so this deletes the collection contents.
         collection.delete(where={"chunk_index": {"$gte": 0}})
         print("  Cleared existing collection (--reindex)")
 
@@ -43,6 +47,7 @@ def run_pipeline(
         else:
             path = Path(src)
             if path.is_dir():
+                # Directory ingestion walks common document formats recursively.
                 files = sorted(
                     p for p in path.rglob("*")
                     if p.suffix.lower() in {".txt", ".md", ".html", ".pdf", ".docx", ".pptx", ".csv", ".json", ".xml"}
@@ -57,6 +62,7 @@ def run_pipeline(
         if doc is None:
             continue
 
+        # Convert one extracted Markdown document into retrieval-sized chunks.
         chunks = chunk_markdown(doc["markdown"], doc["metadata"])
         if not chunks:
             print("  No chunks produced")
@@ -76,6 +82,7 @@ def run_pipeline(
 
 
 def _ingest_one(file_path: Path, collection, reindex: bool, ingest_log_path: str | None = None) -> int:
+    """Ingest one file into an existing Chroma collection."""
     print(f"\n[EXTRACT] file: {file_path.name}")
     doc = extract_from_file(file_path)
     if doc is None:

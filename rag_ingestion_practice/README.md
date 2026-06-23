@@ -1,16 +1,17 @@
 # RAG Ingestion Pipeline
 
-A modular, local-first RAG ingestion pipeline using MarkItDown, sentence-transformers, and ChromaDB.
+A modular, local-first RAG ingestion pipeline using MarkItDown, sentence-transformers, ChromaDB, and optional Ollama generation.
 
 ## Architecture
 
 ```
 Source (files / web pages)
   → [extract.py]  MarkItDown → clean Markdown + metadata
-  → [chunk.py]    heading-aware + token-aware splitting (~500 tok)
+  → [chunking.py] heading-aware + token-aware splitting (~500 tok)
   → [embed.py]    sentence-transformers (all-MiniLM-L6-v2)
   → [store.py]    ChromaDB (persistent, local, cosine similarity)
   → [retrieve.py] query → embed → top-k chunks
+  → [generate.py] optional Ollama answer synthesis
 ```
 
 ## Quick Start
@@ -24,19 +25,26 @@ python pipeline.py --source data/
 
 # Query
 python retrieve.py "what is this document about?"
+
+# Query and generate a natural-language answer with Ollama
+ollama pull llama3.2:3b
+python retrieve.py "what is this document about?" --generate
 ```
+
+Without `--generate`, retrieval returns raw chunks. With `--generate`, the top-k chunks are passed to a local Ollama model so you get an answer plus source references.
 
 ## Modules
 
 | Module | Role |
 |---|---|
 | `config.py` | Paths, model name, chunk parameters |
-| `extract.py` | File & URL → Markdown via MarkItDown |
-| `chunk.py` | Heading-aware split + token cap (500 tok, 64 overlap) |
+| `extract.py` | File & URL → Markdown via MarkItDown, with table cleanup for noisy PDF output |
+| `chunking.py` | Heading-aware split + token cap (500 tok, 64 overlap) |
 | `embed.py` | SentenceTransformer model (cached) |
 | `store.py` | ChromaDB upsert with SHA256 dedup |
 | `pipeline.py` | CLI orchestration: `--source` + `--reindex` |
 | `retrieve.py` | Query loop: `-k 5 "your question"` |
+| `generate.py` | Optional Ollama generation over retrieved chunks |
 
 ## Deduplication
 
@@ -58,11 +66,11 @@ pytest tests/ -v -m "not integration"
 pytest tests/ -v -m integration
 ```
 
-31 tests covering: file extraction, HTML extraction, empty/error handling,
+Tests cover: file extraction, HTML extraction, empty/error handling,
 heading-aware chunking, token-aware splitting, metadata correctness,
 embedding shape and normalization (mocked + real model), Chroma roundtrip,
 deduplication with persisted hash log, retrieval with query vectors,
-and end-to-end pipeline smoke tests with temp directories.
+prompt construction, and end-to-end pipeline smoke tests with temp directories.
 
 ## Metadata
 
