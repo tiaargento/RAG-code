@@ -1,0 +1,3 @@
+This is a sample text file for testing document ingestion.
+The goal is to extract this text, clean it, split it into chunks, and later create embeddings for RAG.
+This file is intentionally simple so I can compare how TXT ingestion differs from PDF and DOCX ingestion.
